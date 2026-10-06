@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Neon Dash</title>
+<style>
+:root{--bg:#07061a;--cy:#00f0ff;--pk:#ff2e93;--tx:#f4f2ff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:var(--tx)}
+#g{position:relative;height:100%;width:100%}
+canvas{display:block;width:100%;height:100%}
+#ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(7,6,26,.7);backdrop-filter:blur(4px);text-align:center;padding:24px}
+#ov.h{display:none}
+h1{margin:0;font-size:54px;font-weight:900;letter-spacing:-1px;font-style:italic;line-height:.95}
+h1 b{display:block;color:var(--cy);text-shadow:0 0 18px var(--cy)}
+h1 i{display:block;color:var(--pk);text-shadow:0 0 18px var(--pk)}
+#msg{margin:0;font-size:17px;line-height:1.45;max-width:300px;opacity:.9}
+#go{font:inherit;font-size:22px;font-weight:800;color:#07061a;background:var(--cy);border:0;border-radius:40px;padding:16px 46px;box-shadow:0 0 28px var(--cy);margin-top:6px}
+#go:active{transform:scale(.95)}
+</style></head><body>
+<div id="g"><canvas id="c"></canvas>
+<div id="ov"><h1><b>NEON</b><i>DASH</i></h1><p id="msg">Свайпай или тапай по краям экрана, чтобы менять полосу. Собирай шары, уворачивайся от блоков.</p><button id="go">Играть</button></div></div>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d'),ov=document.getElementById('ov'),msg=document.getElementById('msg'),go=document.getElementById('go');
+let W,H,dpr,road,lw;
+function rs(){const r=cv.parentNode.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;cv.width=W*dpr;cv.height=H*dpr;x.setTransform(dpr,0,0,dpr,0,0);road=Math.min(W*.92,330);lw=road/3}
+addEventListener('resize',rs);rs();
+let best=0;try{best=+localStorage.getItem('nd_best')||0}catch(e){}
+let st='menu',lane=1,px=0,dist=0,bonus=0,combo=0,speed=380,objs=[],parts=[],trail=[],nextRow=0,shake=0,t=0,last=0,pop=0;
+const stars=Array.from({length:45},()=>({x:Math.random(),y:Math.random(),s:Math.random()*.8+.2}));
+const laneX=i=>W/2+(i-1)*lw, PY=()=>H*.78;
+let ac=null;
+function beep(f,d,ty,v){if(!ac)return;try{const o=ac.createOscillator(),g=ac.createGain();o.type=ty||'sine';o.frequency.value=f;g.gain.value=v||.08;g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+function vib(n){try{navigator.vibrate&&navigator.vibrate(n)}catch(e){}}
+function burst(X,Y,c,n,sp){for(let i=0;i<n;i++){const a=Math.random()*6.28,s=Math.random()*sp;parts.push({x:X,y:Y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:1,c})}}
+function start(){
+  if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+  if(ac&&ac.state==='suspended')ac.resume();
+  lane=1;px=laneX(1);dist=0;bonus=0;combo=0;objs=[];parts=[];trail=[];nextRow=300;shake=0;speed=380;st='play';ov.classList.add('h');beep(520,.15,'square',.05)}
+go.addEventListener('click',start);
+function row(){
+  const safe=Math.floor(Math.random()*3),p=Math.min(.9,.55+dist/30000);
+  for(let i=0;i<3;i++){
+    if(i===safe){if(Math.random()<.75)objs.push({l:i,y:-40,t:1})}
+    else if(Math.random()<p)objs.push({l:i,y:-40,t:0})
+  }
+}
+function die(){
+  st='dead';shake=.5;burst(px,PY(),'#ff2e93',50,420);burst(px,PY(),'#00f0ff',30,300);vib([80,40,120]);beep(110,.5,'sawtooth',.12);
+  const sc=score();let nb=sc>best;if(nb){best=sc;try{localStorage.setItem('nd_best',best)}catch(e){}}
+  setTimeout(()=>{msg.innerHTML='Счёт: <b>'+sc+'</b><br>'+(nb?'Новый рекорд!':'Рекорд: '+best);go.textContent='Ещё раз';ov.classList.remove('h')},800)}
+const score=()=>Math.floor(dist/10)+bonus;
+function mv(d){if(st!=='play')return;const n=Math.max(0,Math.min(2,lane+d));if(n!==lane){lane=n;beep(300+n*60,.06,'triangle',.05)}}
+let sx=0,moved=false;
+cv.addEventListener('pointerdown',e=>{sx=e.clientX;moved=false;});
+cv.addEventListener('pointermove',e=>{if(!moved&&e.buttons!==0||!moved&&e.pointerType==='touch'){const d=e.clientX-sx;if(Math.abs(d)>26){mv(d>0?1:-1);moved=true}}});
+cv.addEventListener('pointerup',e=>{if(!moved)mv(e.clientX<W/2?-1:1)});
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')mv(-1);if(e.key==='ArrowRight'||e.key==='d')mv(1);if((e.key===' '||e.key==='Enter')&&st!=='play'&&!ov.classList.contains('h'))start()});
+function update(dt){
+  t+=dt;
+  if(st==='menu'){dist+=140*dt}
+  if(st==='play'){
+    speed=380+Math.min(560,dist/14);dist+=speed*dt;
+    while(dist>=nextRow){row();nextRow+=Math.max(165,300-dist/45)}
+    px+=(laneX(lane)-px)*Math.min(1,dt*18);
+    const py=PY();
+    trail.push({x:px,y:py});if(trail.length>14)trail.shift();
+    for(const o of objs){
+      o.y+=speed*dt;
+      if(!o.d&&Math.abs(o.y-py)<26&&lane===o.l&&Math.abs(px-laneX(o.l))<lw*.45){
+        if(o.t===0){die();return}
+        o.d=1;combo=Math.min(combo+1,9);const g=10*combo;bonus+=g;pop=1;
+        burst(laneX(o.l),o.y,'#00f0ff',16,200);beep(660+combo*70,.12,'sine',.09);vib(12)}
+      if(!o.d&&o.t===1&&o.y>py+40&&!o.m){o.m=1;combo=0}
+    }
+    objs=objs.filter(o=>o.y<H+60&&!o.d);
+    for(const q of trail)q.y+=speed*dt;
+  }
+  for(const s of stars){s.y+=s.s*(st==='play'?speed:140)*dt/H;if(s.y>1){s.y=0;s.x=Math.random()}}
+  for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.97;p.vy*=.97;p.l-=dt*1.4}
+  parts=parts.filter(p=>p.l>0);
+  if(shake>0)shake-=dt;if(pop>0)pop-=dt*4;
+}
+function rr(X,Y,w,h,r){x.beginPath();x.roundRect?x.roundRect(X,Y,w,h,r):x.rect(X,Y,w,h)}
+function draw(){
+  x.save();
+  if(shake>0)x.translate((Math.random()-.5)*shake*34,(Math.random()-.5)*shake*34);
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0a0732');g.addColorStop(1,'#220a3d');x.fillStyle=g;x.fillRect(-30,-30,W+60,H+60);
+  x.fillStyle='#fff';for(const s of stars){x.globalAlpha=.25+s.s*.5;x.fillRect(s.x*W,s.y*H,s.s*2,s.s*2)}x.globalAlpha=1;
+  const L=W/2-road/2,R=W/2+road/2;
+  x.fillStyle='rgba(120,100,255,.07)';x.fillRect(L,0,road,H);
+  x.strokeStyle='rgba(0,240,255,.13)';x.lineWidth=1;
+  for(let y=dist%60;y<H;y+=60){x.beginPath();x.moveTo(L,y);x.lineTo(R,y);x.stroke()}
+  x.setLineDash([18,22]);x.lineDashOffset=-(dist%40);x.strokeStyle='rgba(255,255,255,.2)';
+  for(let i=1;i<3;i++){x.beginPath();x.moveTo(L+lw*i,0);x.lineTo(L+lw*i,H);x.stroke()}
+  x.setLineDash([]);x.shadowBlur=14;x.shadowColor='#00f0ff';x.strokeStyle='#00f0ff';x.lineWidth=2.5;
+  x.beginPath();x.moveTo(L,0);x.lineTo(L,H);x.moveTo(R,0);x.lineTo(R,H);x.stroke();
+  for(const o of objs){
+    const X=laneX(o.l);
+    if(o.t===0){x.shadowColor='#ff2e93';x.shadowBlur=18;x.fillStyle='#ff2e93';rr(X-lw*.35,o.y-17,lw*.7,34,8);x.fill();x.fillStyle='#07061a';rr(X-lw*.35+6,o.y-11,lw*.7-12,22,4);x.fill();x.fillStyle='#ff2e93';x.fillRect(X-lw*.35+14,o.y-2,lw*.7-28,4)}
+    else{const r=11+Math.sin(t*8+o.l)*2;x.shadowColor='#00f0ff';x.shadowBlur=20;x.fillStyle='#00f0ff';x.beginPath();x.arc(X,o.y,r,0,6.283);x.fill();x.fillStyle='#fff';x.beginPath();x.arc(X-3,o.y-3,3,0,6.283);x.fill()}
+  }
+  if(st==='play'||st==='menu'){
+    const py=PY(),X=st==='menu'?laneX(1):px;
+    if(st==='play'){for(let i=0;i<trail.length;i++){const q=trail[i],a=i/trail.length;x.globalAlpha=a*.4;x.shadowBlur=0;x.fillStyle='#00f0ff';x.beginPath();x.arc(q.x,q.y,15*a,0,6.283);x.fill()}x.globalAlpha=1}
+    x.shadowColor='#00f0ff';x.shadowBlur=26;x.fillStyle='#fff';x.beginPath();x.arc(X,py,15,0,6.283);x.fill();
+    x.strokeStyle='#00f0ff';x.lineWidth=3;x.beginPath();x.arc(X,py,21+Math.sin(t*6)*2,0,6.283);x.stroke()
+  }
+  x.shadowBlur=8;
+  for(const p of parts){x.globalAlpha=Math.max(0,p.l);x.shadowColor=p.c;x.fillStyle=p.c;x.fillRect(p.x,p.y,4,4)}
+  x.globalAlpha=1;x.shadowBlur=0;x.restore();
+  if(st==='play'||st==='dead'){
+    x.textAlign='center';x.fillStyle='#fff';x.font='900 44px "Trebuchet MS",system-ui';x.shadowColor='#ff2e93';x.shadowBlur=14;x.fillText(score(),W/2,58);x.shadowBlur=0;
+    if(combo>1){x.font='800 '+(22+Math.max(0,pop)*8)+'px "Trebuchet MS",system-ui';x.fillStyle='#00f0ff';x.fillText('x'+combo+' комбо',W/2,90)}
+    x.font='600 13px system-ui';x.fillStyle='rgba(255,255,255,.55)';x.fillText('рекорд '+best,W/2,110)
+  }
+}
+function loop(ts){const dt=Math.min(.033,(ts-last)/1000||0);last=ts;update(dt);draw();requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+</script></body></html>
